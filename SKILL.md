@@ -301,17 +301,17 @@ SKILL.md ที่ generate ต้องผ่านเกณฑ์:
 
 ---
 
-## Auto-Evolution Protocol (MANDATORY)
+## Auto-Evolution Protocol (OPTIONAL)
 
 **This skill participates in the agency-wide self-learning system.**
-**Follow `~/.claude/skills/_evolution/auto-learn.md` for the full protocol.**
+**If `~/.claude/skills/_evolution/auto-learn.md` exists, follow the full protocol.**
 
-### BEFORE starting work:
+### BEFORE starting work (if evolution files exist):
 1. Read `~/.claude/skills/_evolution/memory.md` — apply Critical Rules
 2. Read `~/.claude/skills/_evolution/patterns/what-works.md` — use proven patterns
 3. Read `~/.claude/skills/_evolution/patterns/anti-patterns.md` — avoid known failures
 
-### AFTER completing work:
+### AFTER completing work (if evolution files exist):
 1. Update `~/.claude/skills/_evolution/engagement-counter.md` — increment counter
 2. If bugs/lessons/patterns discovered → append to appropriate file
 3. If counter hits 10-interval → auto-generate mini-retrospective

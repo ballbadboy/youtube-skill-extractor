@@ -38,7 +38,8 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, WebFetch, WebSearch
 
 {{WORKFLOWS}}
 
-<!--
+<!-- NOTE TO CLAUDE: Use the format below for each workflow. Do NOT include these HTML comments in the generated output.
+
 Format per workflow:
 ### Workflow: <name>
 
