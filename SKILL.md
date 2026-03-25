@@ -35,6 +35,10 @@ argument-hint: "<youtube-url> or playlist <url> or list or validate <video-id>"
 | `/youtube-skill-extractor <url> --format guide` | สร้าง standalone guide แทน SKILL.md |
 | `/youtube-skill-extractor <url> --format cheatsheet` | สร้างสรุปย่อ 1 หน้า |
 | `/youtube-skill-extractor <url> --format training` | สร้างเอกสารฝึกอบรม |
+| `/youtube-skill-extractor export <video-id>` | Export skill เป็น .zip แชร์ได้ |
+| `/youtube-skill-extractor import <file.zip>` | Import skill จาก .zip package |
+| `/youtube-skill-extractor check-update <video-id>` | ตรวจว่า video มีการเปลี่ยนแปลงมั้ย |
+| `/youtube-skill-extractor check-update --all` | ตรวจทุก video ที่เคย extract |
 
 ---
 
@@ -48,7 +52,10 @@ youtube-skill-extractor/
 │   ├── batch-extract.sh        ← Batch extraction (multiple URLs)
 │   ├── playlist-extract.sh     ← Playlist extraction
 │   ├── list-videos.sh          ← List extracted videos
-│   └── validate-skill.sh       ← Quality validation
+│   ├── validate-skill.sh       ← Quality validation
+│   ├── export-skill.sh         ← Export skill เป็น .zip package
+│   ├── import-skill.sh         ← Import skill จาก .zip package
+│   └── check-update.sh         ← ตรวจสอบ video updates
 ├── templates/
 │   ├── skill-template.md       ← Template สำหรับ SKILL.md
 │   ├── guide-template.md       ← Template สำหรับ standalone guide
@@ -336,6 +343,108 @@ cp output/<video-id>/SKILL.md ~/.claude/skills/<skill-name>/SKILL.md
 | Completeness | ความยาวเพียงพอ, มี tables |
 
 ถ้าไม่ผ่าน Claude จะแก้ไข SKILL.md ให้อัตโนมัติ แล้วรัน validate อีกรอบ
+
+---
+
+## Skill Marketplace (Export/Import)
+
+### Export Skill
+สร้าง .zip package จาก skill ที่ generate แล้ว พร้อมแชร์หรือขาย:
+
+```
+/youtube-skill-extractor export <video-id>
+```
+
+**Options:**
+- `--include-frames` — รวม screenshots ใน package ด้วย (ไฟล์ใหญ่ขึ้น)
+
+**Package ประกอบด้วย:**
+- `SKILL.md` — ไฟล์ skill หลัก
+- `metadata.json` — ข้อมูล video ต้นทาง
+- `analysis.md` — ผลวิเคราะห์
+- `manifest.json` — ข้อมูล package (version, date, contents)
+- `frames/` — screenshots (ถ้าใช้ `--include-frames`)
+
+### Import Skill
+นำเข้า skill จาก .zip package:
+
+```
+/youtube-skill-extractor import <file.skill.zip>
+/youtube-skill-extractor import <file.skill.zip> --install   ← ติดตั้งเลย
+```
+
+ถ้าไม่ใส่ `--install` จะแสดงข้อมูล package ให้ดูก่อน
+
+---
+
+## Auto-Update Detection
+
+ตรวจสอบว่า video ที่เคย extract มีการเปลี่ยนแปลงมั้ย:
+
+```
+/youtube-skill-extractor check-update <video-id>
+/youtube-skill-extractor check-update --all
+```
+
+**ตรวจสอบอะไร:**
+- Title เปลี่ยนมั้ย
+- Duration เปลี่ยนมั้ย (อาจ re-upload)
+- Views เพิ่มขึ้นเท่าไหร่
+
+ถ้าพบการเปลี่ยนแปลง จะแนะนำให้ re-extract ด้วย `--force`
+
+---
+
+## Interactive Preview
+
+ก่อนติดตั้ง skill Claude จะแสดง preview ให้ดู:
+
+1. **สรุปสิ่งที่สกัดได้** — กี่ step, กี่ sections, กี่ tips
+2. **ตัวอย่าง content** — แสดง 2-3 steps แรก
+3. **Quality score** — ผล validate (pass/fail/warnings)
+4. **ถามยืนยัน** — จะติดตั้งเลย, แก้ไขก่อน, หรือยกเลิก
+
+Preview เปิดอัตโนมัติใน full pipeline (`/youtube-skill-extractor <url>`)
+ข้าม preview ด้วย `--no-preview`
+
+---
+
+## OCR Enhancement
+
+สำหรับ video ที่มี text บนหน้าจอ (UI, terminal, slide) Claude ใช้ multimodal vision อ่าน text จากภาพโดยตรง
+
+**วิธีทำงาน:**
+1. Claude อ่าน frame ด้วย vision → จับ text ที่เห็นในภาพ
+2. เปรียบเทียบ text ในภาพกับ transcript → หา context
+3. ระบุ text สำคัญลงใน analysis (เช่น menu labels, button text, error messages)
+
+**ไม่ต้องติดตั้ง OCR library เพิ่ม** — ใช้ Claude vision ที่มีอยู่แล้ว
+
+**เหมาะกับ:**
+- Software tutorial ที่มี UI text
+- Terminal/CLI ที่มี commands บนจอ
+- Presentation ที่มี text content บน slides
+
+---
+
+## Audio Analysis (Fallback)
+
+สำหรับ video ที่ไม่มี subtitle/auto-caption:
+
+**กลยุทธ์:**
+1. ลอง transcript ปกติก่อน (Thai → English → any language)
+2. ถ้าไม่มี transcript → Claude วิเคราะห์จากภาพอย่างเดียว (visual-only mode)
+3. Visual-only mode: เพิ่มจำนวน frames (interval ทุก 10 วินาที) เพื่อชดเชย
+
+**Visual-Only Mode ทำอะไรต่าง:**
+- ตัด frames ถี่ขึ้น (ทุก 10 วินาที แทน 15)
+- เน้นวิเคราะห์ UI elements จากภาพ
+- สร้าง SKILL.md จาก visual analysis เป็นหลัก
+- Note ใน SKILL.md ว่า "สกัดจากภาพเท่านั้น ไม่มี transcript"
+
+**ข้อจำกัด:**
+- ผลลัพธ์อาจไม่ละเอียดเท่า video ที่มี transcript
+- เหมาะกับ software tutorial มากกว่า talking head
 
 ---
 

@@ -135,6 +135,10 @@ chmod +x ~/.claude/skills/youtube-skill-extractor/scripts/*.sh
 | `/youtube-skill-extractor <url> --format guide` | สร้าง standalone guide แทน SKILL.md |
 | `/youtube-skill-extractor <url> --format cheatsheet` | สร้างสรุปย่อ 1 หน้า |
 | `/youtube-skill-extractor <url> --format training` | สร้างเอกสารฝึกอบรมสำหรับทีม |
+| `/youtube-skill-extractor export <video-id>` | Export skill เป็น .zip แชร์ได้ |
+| `/youtube-skill-extractor import <file.zip>` | Import skill จาก .zip package |
+| `/youtube-skill-extractor check-update <video-id>` | ตรวจว่า video มีการเปลี่ยนแปลงมั้ย |
+| `/youtube-skill-extractor check-update --all` | ตรวจทุก video ที่เคย extract |
 
 ---
 
@@ -391,7 +395,10 @@ youtube-skill-extractor/
 │   ├── batch-extract.sh        ← สกัดหลาย video พร้อมกัน
 │   ├── playlist-extract.sh     ← สกัดทุก video จาก playlist
 │   ├── list-videos.sh          ← ดูรายการ video ที่เคยสกัด
-│   └── validate-skill.sh       ← ตรวจสอบคุณภาพ SKILL.md
+│   ├── validate-skill.sh       ← ตรวจสอบคุณภาพ SKILL.md
+│   ├── export-skill.sh         ← Export skill เป็น .zip package
+│   ├── import-skill.sh         ← Import skill จาก .zip package
+│   └── check-update.sh         ← ตรวจสอบ video updates
 ├── templates/
 │   ├── skill-template.md       ← Template สำหรับ SKILL.md (default)
 │   ├── guide-template.md       ← Template สำหรับ standalone guide
@@ -646,9 +653,11 @@ print(f'Auto-captions: {list(d.get(\"automatic_captions\", {}).keys())[:5]}')
 
 ---
 
-## Features ใหม่ (v2)
+## Features ใหม่
 
-### Playlist Support
+### v2 — Playlist, Resume, Validation
+
+#### Playlist Support
 
 สกัดทุก video จาก YouTube playlist อัตโนมัติ:
 
@@ -660,7 +669,7 @@ print(f'Auto-captions: {list(d.get(\"automatic_captions\", {}).keys())[:5]}')
 - Extract ทุก video ตามลำดับ
 - ข้าม video ที่เคย extract แล้วอัตโนมัติ
 
-### Duplicate Detection & Resume
+#### Duplicate Detection & Resume
 
 **Duplicate Detection:** ถ้า video เคย extract แล้ว script จะแจ้งเตือนและข้าม
 
@@ -671,7 +680,7 @@ print(f'Auto-captions: {list(d.get(\"automatic_captions\", {}).keys())[:5]}')
 
 **Resume:** ถ้า extract ค้างกลางทาง (เช่น internet หลุด) สามารถรันใหม่ได้ — script จะข้าม step ที่ทำเสร็จแล้วและเริ่มต่อจาก step ที่ยังไม่เสร็จ
 
-### Timestamp Mapping
+#### Timestamp Mapping
 
 สร้าง `transcript_timestamps.json` ที่เชื่อม text กับ timestamp:
 
@@ -684,7 +693,7 @@ print(f'Auto-captions: {list(d.get(\"automatic_captions\", {}).keys())[:5]}')
 
 ช่วยให้ Claude เชื่อม frame กับ transcript ได้แม่นยำขึ้น — รู้ว่า frame ที่ timestamp 5.0 ตรงกับคำพูดอะไร
 
-### Quality Validation
+#### Quality Validation
 
 ตรวจสอบ SKILL.md ที่ generate แล้วว่าผ่านเกณฑ์:
 
@@ -694,13 +703,56 @@ print(f'Auto-captions: {list(d.get(\"automatic_captions\", {}).keys())[:5]}')
 
 ตรวจ: frontmatter, required sections, actionability, attribution, completeness
 
-### Output Formats เพิ่มเติม
+#### Output Formats เพิ่มเติม
 
 | Format | คำสั่ง | ลักษณะ |
 |--------|--------|--------|
 | Standalone Guide | `--format guide` | คู่มือ step-by-step อ่านเองได้ |
 | Cheat Sheet | `--format cheatsheet` | สรุปย่อ 1 หน้า ปริ้นติดข้างจอ |
 | Training Doc | `--format training` | เอกสารฝึกอบรม มี exercises + assessment |
+
+---
+
+### v3 — Marketplace, Auto-Update, OCR, Audio
+
+#### Skill Marketplace (Export/Import)
+
+แชร์ skill ที่สร้างแล้วกับคนอื่น:
+
+```
+# Export เป็น .zip
+/youtube-skill-extractor export <video-id>
+/youtube-skill-extractor export <video-id> --include-frames
+
+# Import จาก .zip
+/youtube-skill-extractor import <file.skill.zip>
+/youtube-skill-extractor import <file.skill.zip> --install
+```
+
+Package ประกอบด้วย SKILL.md, metadata.json, analysis.md, manifest.json และ frames (optional)
+
+#### Auto-Update Detection
+
+ตรวจสอบว่า video ที่เคย extract มีการเปลี่ยนแปลงมั้ย:
+
+```
+/youtube-skill-extractor check-update <video-id>
+/youtube-skill-extractor check-update --all
+```
+
+ตรวจ: title เปลี่ยน, duration เปลี่ยน (re-upload?), views เพิ่มเท่าไหร่
+
+#### Interactive Preview
+
+ก่อนติดตั้ง skill Claude จะแสดง preview ให้ดู — สรุปสิ่งที่สกัดได้, ตัวอย่าง content, quality score แล้วถามยืนยันก่อน install ข้าม preview ด้วย `--no-preview`
+
+#### OCR Enhancement
+
+Claude ใช้ multimodal vision อ่าน text จากภาพโดยตรง — จับ menu labels, button text, error messages จาก screenshots ไม่ต้องติดตั้ง OCR library เพิ่ม
+
+#### Audio Analysis (Visual-Only Fallback)
+
+สำหรับ video ที่ไม่มี subtitle — Claude วิเคราะห์จากภาพอย่างเดียว ตัด frames ถี่ขึ้น (ทุก 10 วินาที) เพื่อชดเชย transcript ที่ไม่มี
 
 ---
 
