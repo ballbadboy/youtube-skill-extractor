@@ -28,6 +28,12 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, WebFetch, WebSearch
 | `/youtube-skill-extractor generate <video-id>` | Generate SKILL.md จากผลวิเคราะห์ |
 | `/youtube-skill-extractor batch <url1> <url2>...` | สกัดจากหลาย video → รวมเป็น 1 skill |
 | `/youtube-skill-extractor list` | ดู video ที่เคยสกัดแล้ว |
+| `/youtube-skill-extractor <url> --force` | สกัดใหม่แม้เคยทำแล้ว (force re-extract) |
+| `/youtube-skill-extractor playlist <url>` | สกัดทุก video จาก YouTube playlist |
+| `/youtube-skill-extractor validate <video-id>` | ตรวจสอบคุณภาพ SKILL.md |
+| `/youtube-skill-extractor <url> --format guide` | สร้าง standalone guide แทน SKILL.md |
+| `/youtube-skill-extractor <url> --format cheatsheet` | สร้างสรุปย่อ 1 หน้า |
+| `/youtube-skill-extractor <url> --format training` | สร้างเอกสารฝึกอบรม |
 
 ---
 
@@ -37,14 +43,22 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, WebFetch, WebSearch
 youtube-skill-extractor/
 ├── SKILL.md                    ← Orchestrator (this file)
 ├── scripts/
-│   └── extract.sh              ← yt-dlp + ffmpeg extraction
+│   ├── extract.sh              ← yt-dlp + ffmpeg extraction
+│   ├── batch-extract.sh        ← Batch extraction (multiple URLs)
+│   ├── playlist-extract.sh     ← Playlist extraction
+│   ├── list-videos.sh          ← List extracted videos
+│   └── validate-skill.sh       ← Quality validation
 ├── templates/
-│   └── skill-template.md       ← Template สำหรับ generate SKILL.md
+│   ├── skill-template.md       ← Template สำหรับ SKILL.md
+│   ├── guide-template.md       ← Template สำหรับ standalone guide
+│   ├── cheatsheet-template.md  ← Template สำหรับ cheat sheet
+│   └── training-template.md    ← Template สำหรับเอกสารฝึกอบรม
 └── output/                     ← Extracted data per video
     └── <video-id>/
         ├── metadata.json       ← Title, channel, duration
         ├── transcript_th.txt   ← Thai transcript
         ├── transcript_en.txt   ← English transcript
+        ├── transcript_timestamps.json ← Timestamp mapping for transcript
         ├── frames/             ← Scene-change screenshots
         │   ├── scene_0001.jpg
         │   ├── scene_0002.jpg
@@ -54,7 +68,7 @@ youtube-skill-extractor/
         └── SKILL.md            ← Generated skill (output)
 ```
 
-**Dependencies:** `yt-dlp`, `ffmpeg` (via Homebrew)
+**Dependencies:** `yt-dlp`, `ffmpeg`, `python3` (via Homebrew)
 
 ---
 
@@ -241,6 +255,89 @@ cp output/<video-id>/SKILL.md ~/.claude/skills/<skill-name>/SKILL.md
 
 ---
 
+## Playlist Mode: `/youtube-skill-extractor playlist`
+
+สกัดทุก video จาก YouTube playlist อัตโนมัติ:
+
+```
+/youtube-skill-extractor playlist https://www.youtube.com/playlist?list=PLxxxxx
+```
+
+**Workflow:**
+1. ดึงรายชื่อ video ทั้งหมดจาก playlist ด้วย `yt-dlp --flat-playlist`
+2. Extract ทุก video ตามลำดับ
+3. ถ้า video ไหนเคย extract แล้ว จะข้ามอัตโนมัติ (ใช้ `--force` เพื่อบังคับ)
+4. สรุปผลลัพธ์: สำเร็จกี่ video, ล้มเหลวกี่ video
+
+**Tips:**
+- ใช้ร่วมกับ batch mode ได้: extract playlist ก่อน แล้ว batch analyze ทีหลัง
+- Playlist ขนาดใหญ่ (>20 video) อาจใช้เวลานาน
+
+---
+
+## Duplicate Detection & Resume
+
+### Duplicate Detection
+ถ้า video เคย extract แล้ว script จะแจ้งเตือนและข้าม:
+```
+⚠️ Video dQw4w9WgXcQ was already extracted.
+   Output: ~/.claude/skills/youtube-skill-extractor/output/dQw4w9WgXcQ
+   Use --force to re-extract.
+```
+
+ใช้ `--force` เพื่อบังคับ extract ใหม่:
+```
+/youtube-skill-extractor https://youtube.com/watch?v=xxxxx --force
+```
+
+### Resume (ทำต่อจากที่ค้าง)
+ถ้า extract ค้างกลางทาง (เช่น internet หลุด) สามารถรันใหม่ได้:
+- Script จะข้าม step ที่ทำเสร็จแล้ว (เช่น metadata, transcript)
+- เริ่มต่อจาก step ที่ยังไม่เสร็จ
+- ประหยัดเวลาไม่ต้องดาวน์โหลดซ้ำ
+
+---
+
+## Timestamp Mapping
+
+นอกจาก transcript text แล้ว ยังสร้าง `transcript_timestamps.json` ที่เชื่อม text กับ timestamp:
+
+```json
+[
+  {"start": 0.0, "end": 3.5, "text": "สวัสดีครับ วันนี้จะสอน..."},
+  {"start": 3.5, "end": 7.2, "text": "เริ่มจากเปิดโปรแกรม..."}
+]
+```
+
+**ประโยชน์:**
+- Claude เชื่อม frame กับ transcript ได้แม่นยำขึ้น (รู้ว่า frame ที่ timestamp 5.0 ตรงกับคำพูดอะไร)
+- สร้าง step-by-step ที่ sync กับ timeline จริง
+- ช่วยในการ batch merge: ต่อ timeline จากหลาย video ได้
+
+---
+
+## Quality Validation: `/youtube-skill-extractor validate`
+
+ตรวจสอบ SKILL.md ที่ generate แล้วว่าผ่านเกณฑ์:
+
+```
+/youtube-skill-extractor validate <video-id>
+```
+
+**เกณฑ์ที่ตรวจ:**
+
+| หมวด | ตรวจอะไร |
+|------|---------|
+| Frontmatter | มี name, description |
+| Required Sections | Quick Reference, Knowledge Base, Workflows, UI Nav, Issues, Tips, Attribution |
+| Actionability | มี step-by-step, มี UI location references |
+| Attribution | มี YouTube link, มี channel credit |
+| Completeness | ความยาวเพียงพอ, มี tables |
+
+ถ้าไม่ผ่าน Claude จะแก้ไข SKILL.md ให้อัตโนมัติ แล้วรัน validate อีกรอบ
+
+---
+
 ## Quality Standards
 
 SKILL.md ที่ generate ต้องผ่านเกณฑ์:
@@ -267,18 +364,31 @@ SKILL.md ที่ generate ต้องผ่านเกณฑ์:
 
 ## Output Formats
 
-นอกจาก SKILL.md ยังสร้างได้:
-
-| Format | Use Case |
-|--------|----------|
-| `SKILL.md` | ใช้ใน Claude Code (default) |
-| `guide.md` | คู่มือ step-by-step แบบ standalone |
-| `cheatsheet.md` | สรุปย่อ 1 หน้า |
-| `training.md` | เอกสารฝึกอบรมสำหรับทีม |
-
-เพิ่ม `--format <type>` เพื่อเลือก:
+เลือก format ด้วย `--format`:
 ```
-/youtube-skill-extractor <url> --format training
+/youtube-skill-extractor <url> --format <type>
+```
+
+| Format | Template | Use Case | ลักษณะ |
+|--------|----------|----------|--------|
+| `skill` | `skill-template.md` | ใช้ใน Claude Code (default) | Frontmatter + orchestration instructions |
+| `guide` | `guide-template.md` | คู่มือ step-by-step แบบ standalone | อ่านเองได้ ไม่ต้องมี Claude |
+| `cheatsheet` | `cheatsheet-template.md` | สรุปย่อ 1 หน้า | Dense, ปริ้นติดข้างจอ |
+| `training` | `training-template.md` | เอกสารฝึกอบรมสำหรับทีม | มี exercises + assessment |
+
+**ตัวอย่าง:**
+```
+/youtube-skill-extractor https://youtube.com/watch?v=xxxxx --format training
+/youtube-skill-extractor https://youtube.com/watch?v=xxxxx --format cheatsheet
+```
+
+**Generate หลาย format จาก video เดียว:**
+```
+# Extract ครั้งเดียว แล้ว generate หลาย format
+/youtube-skill-extractor extract https://youtube.com/watch?v=xxxxx
+/youtube-skill-extractor generate xxxxx --format skill
+/youtube-skill-extractor generate xxxxx --format guide
+/youtube-skill-extractor generate xxxxx --format cheatsheet
 ```
 
 ---

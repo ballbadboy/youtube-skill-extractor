@@ -39,6 +39,7 @@
   - [ความปลอดภัยและจริยธรรม](#ความปลอดภัยและจริยธรรม)
   - [แก้ไขปัญหา (Troubleshooting)](#แก้ไขปัญหา-troubleshooting)
   - [ตัวอย่างการใช้งานจริง](#ตัวอย่างการใช้งานจริง)
+  - [Features ใหม่ (v2)](#features-ใหม่-v2)
 
 ---
 
@@ -100,8 +101,8 @@ git clone <repo-url> ~/.claude/skills/youtube-skill-extractor
 mkdir -p ~/.claude/skills/youtube-skill-extractor
 cp -r . ~/.claude/skills/youtube-skill-extractor/
 
-# ทำให้ script รันได้
-chmod +x ~/.claude/skills/youtube-skill-extractor/scripts/extract.sh
+# ทำให้ scripts รันได้
+chmod +x ~/.claude/skills/youtube-skill-extractor/scripts/*.sh
 ```
 
 ### 3. ตรวจสอบการติดตั้ง
@@ -123,11 +124,17 @@ chmod +x ~/.claude/skills/youtube-skill-extractor/scripts/extract.sh
 | คำสั่ง | รายละเอียด |
 |--------|-----------|
 | `/youtube-skill-extractor <url>` | สกัดความรู้จาก video ทำทุกขั้นตอนอัตโนมัติ |
+| `/youtube-skill-extractor <url> --force` | สกัดใหม่แม้เคยทำแล้ว (force re-extract) |
 | `/youtube-skill-extractor extract <url>` | ดึง transcript + frames อย่างเดียว (ไม่วิเคราะห์) |
 | `/youtube-skill-extractor analyze <video-id>` | วิเคราะห์ frames + transcript ที่ดึงไว้แล้ว |
 | `/youtube-skill-extractor generate <video-id>` | สร้าง SKILL.md จากผลวิเคราะห์ |
 | `/youtube-skill-extractor batch <url1> <url2>...` | สกัดจากหลาย video รวมเป็น 1 skill |
-| `/youtube-skill-extractor list` | ดู video ที่เคยสกัดแล้ว |
+| `/youtube-skill-extractor playlist <url>` | สกัดทุก video จาก YouTube playlist |
+| `/youtube-skill-extractor validate <video-id>` | ตรวจสอบคุณภาพ SKILL.md ที่ generate |
+| `/youtube-skill-extractor list` | ดู video ที่เคยสกัดแล้ว พร้อมสถานะ |
+| `/youtube-skill-extractor <url> --format guide` | สร้าง standalone guide แทน SKILL.md |
+| `/youtube-skill-extractor <url> --format cheatsheet` | สร้างสรุปย่อ 1 หน้า |
+| `/youtube-skill-extractor <url> --format training` | สร้างเอกสารฝึกอบรมสำหรับทีม |
 
 ---
 
@@ -380,9 +387,16 @@ youtube-skill-extractor/
 ├── SKILL.md                    ← Orchestrator — Claude อ่านไฟล์นี้เพื่อรู้วิธีทำงาน
 ├── .gitignore                  ← ไม่ track output/ ใน git
 ├── scripts/
-│   └── extract.sh              ← Shell script สำหรับดึงข้อมูลจาก YouTube
+│   ├── extract.sh              ← ดึงข้อมูลจาก YouTube (หลัก)
+│   ├── batch-extract.sh        ← สกัดหลาย video พร้อมกัน
+│   ├── playlist-extract.sh     ← สกัดทุก video จาก playlist
+│   ├── list-videos.sh          ← ดูรายการ video ที่เคยสกัด
+│   └── validate-skill.sh       ← ตรวจสอบคุณภาพ SKILL.md
 ├── templates/
-│   └── skill-template.md       ← Template สำหรับสร้าง SKILL.md
+│   ├── skill-template.md       ← Template สำหรับ SKILL.md (default)
+│   ├── guide-template.md       ← Template สำหรับ standalone guide
+│   ├── cheatsheet-template.md  ← Template สำหรับสรุปย่อ 1 หน้า
+│   └── training-template.md    ← Template สำหรับเอกสารฝึกอบรม
 └── output/                     ← ข้อมูลที่ดึงมา (สร้างอัตโนมัติ)
     └── <video-id>/             ← folder ต่อ video
 ```
@@ -398,6 +412,7 @@ output/<video-id>/
 ├── metadata.json               ← ข้อมูล video (title, channel, duration, views)
 ├── transcript_th.txt           ← Transcript ภาษาไทย (ถ้ามี)
 ├── transcript_en.txt           ← Transcript ภาษาอังกฤษ (ถ้ามี)
+├── transcript_timestamps.json  ← Transcript พร้อม timestamp (NEW)
 ├── subs.th.vtt                 ← ไฟล์ subtitle ต้นฉบับ (VTT format)
 ├── subs.en.vtt                 ← ไฟล์ subtitle ต้นฉบับ
 ├── frames/                     ← Screenshots จาก scene detection
@@ -628,6 +643,64 @@ print(f'Auto-captions: {list(d.get(\"automatic_captions\", {}).keys())[:5]}')
 | Mobile | `https://m.youtube.com/watch?v=dQw4w9WgXcQ` |
 | Shorts | `https://www.youtube.com/shorts/dQw4w9WgXcQ` |
 | With params | `https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=120` |
+
+---
+
+## Features ใหม่ (v2)
+
+### Playlist Support
+
+สกัดทุก video จาก YouTube playlist อัตโนมัติ:
+
+```
+/youtube-skill-extractor playlist https://www.youtube.com/playlist?list=PLxxxxx
+```
+
+- ดึงรายชื่อ video ทั้งหมดจาก playlist ด้วย `yt-dlp --flat-playlist`
+- Extract ทุก video ตามลำดับ
+- ข้าม video ที่เคย extract แล้วอัตโนมัติ
+
+### Duplicate Detection & Resume
+
+**Duplicate Detection:** ถ้า video เคย extract แล้ว script จะแจ้งเตือนและข้าม
+
+```
+⚠️ Video dQw4w9WgXcQ was already extracted.
+   Use --force to re-extract.
+```
+
+**Resume:** ถ้า extract ค้างกลางทาง (เช่น internet หลุด) สามารถรันใหม่ได้ — script จะข้าม step ที่ทำเสร็จแล้วและเริ่มต่อจาก step ที่ยังไม่เสร็จ
+
+### Timestamp Mapping
+
+สร้าง `transcript_timestamps.json` ที่เชื่อม text กับ timestamp:
+
+```json
+[
+  {"start": 0.0, "end": 3.5, "text": "สวัสดีครับ วันนี้จะสอน..."},
+  {"start": 3.5, "end": 7.2, "text": "เริ่มจากเปิดโปรแกรม..."}
+]
+```
+
+ช่วยให้ Claude เชื่อม frame กับ transcript ได้แม่นยำขึ้น — รู้ว่า frame ที่ timestamp 5.0 ตรงกับคำพูดอะไร
+
+### Quality Validation
+
+ตรวจสอบ SKILL.md ที่ generate แล้วว่าผ่านเกณฑ์:
+
+```
+/youtube-skill-extractor validate <video-id>
+```
+
+ตรวจ: frontmatter, required sections, actionability, attribution, completeness
+
+### Output Formats เพิ่มเติม
+
+| Format | คำสั่ง | ลักษณะ |
+|--------|--------|--------|
+| Standalone Guide | `--format guide` | คู่มือ step-by-step อ่านเองได้ |
+| Cheat Sheet | `--format cheatsheet` | สรุปย่อ 1 หน้า ปริ้นติดข้างจอ |
+| Training Doc | `--format training` | เอกสารฝึกอบรม มี exercises + assessment |
 
 ---
 
