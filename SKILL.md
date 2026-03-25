@@ -8,7 +8,8 @@ description: >
   learn from youtube, video to skill, ดู youtube, สอนจาก youtube, tutorial,
   สร้าง skill จาก video, youtube skill, yt skill, ดึงความรู้จาก video,
   แปลง video เป็น skill
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, WebFetch, WebSearch
+user-invocable: true
+argument-hint: "<youtube-url> or playlist <url> or list or validate <video-id>"
 ---
 
 # YouTube Skill Extractor
