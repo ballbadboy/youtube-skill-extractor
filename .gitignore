@@ -1,0 +1,8 @@
+output/
+*.mp3
+*.mp4
+*.wav
+audio_tmp.*
+__pycache__/
+*.pyc
+.DS_Store
